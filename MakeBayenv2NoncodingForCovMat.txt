@@ -1,0 +1,81 @@
+ssh klott@hulk.zoology.ubc.ca
+cd /data/seqcap/pine/bwa_pseudo/round2_bams/final_tables_filt
+cd bayenv2
+R
+
+######################## IN R ##################################
+full <- read.table("var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.loci")
+noncod2 <- read.table("../var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.noncoding_loci")
+noncod <- read.table("../pine_covmat_snps_p95_h0.7.txt")
+head(full)
+head(noncod)
+head(noncod2[,1:2])
+
+fullC<-as.character(full$V2)
+noncodC<-as.character(noncod$V1)
+noncodC2 <- paste(noncodC, noncod$V2, sep="__")
+
+length(fullC)
+### 874386
+length(levels(as.factor(fullC)))
+### 874386
+
+length(noncodC2)
+### 10000
+length(levels(as.factor(noncodC2)))
+### [1] 10000
+
+ind <- which(fullC%in%noncodC2)
+length(ind)
+
+write.table(data.frame(ind), file="noncoding_indices.finalPops279.bayenv", col.names=FALSE, row.names=FALSE)
+
+covmat <- read.table("var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv")
+bayenvlines <- 2*ind - 1
+bayenvlines2 <- bayenvlines +1
+noncodcovmat <- covmat[c(bayenvlines, bayenvlines2),]
+dim(noncodcovmat)
+
+
+write.table(noncodcovmat, "var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod", col.names=FALSE, row.names=FALSE, sep ="\t", eol="\t\n")
+
+
+######################## IN system ##################################
+
+cd /data/seqcap/pine/bwa_pseudo/round2_bams/final_tables_filt/bayenv2
+
+screen
+/data/programs/bayenv2/bayenv2 -i var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod -p 279 -k 100000 -r 9999 > var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmat
+
+cd /data/seqcap/pine/bwa_pseudo/round2_bams/final_tables_filt/bayenv2
+screen
+/data/programs/bayenv2/bayenv2 -i var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod -p 279 -k 100000 -r 9999 > var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmat2
+
+screen
+/data/programs/bayenv2/bayenv2 -i var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod -p 279 -k 100000 -r 9999 > var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmat3
+
+######################## IN system ##################################
+tail -280 var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmat > var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED
+
+tail -280 var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmat2 > var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED2
+
+tail -280 var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmat3 > var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED3
+
+R
+#################### IN R ###########################
+
+c1 <- as.matrix(read.table("var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED"))
+c2 <- as.matrix(read.table("var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED2"))
+c3 <- as.matrix(read.table("var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED3"))
+
+
+cor.test(as.numeric(c1),as.numeric(c2))
+cor.test(as.numeric(c2),as.numeric(c3))
+cor.test(as.numeric(c1),as.numeric(c3))
+
+c4 <- (c1 + c3)/2
+
+write.table(c4, "var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED13ave.final", col.names=FALSE, row.names=FALSE, sep="/t", eol="/t/n")
+
+x<- read.table("var_out_pine688_allhet_ALL.table.contig.filt10.passFILT2_p95_h0.7.finalPops279.bayenv.noncod.covmatED13ave.final")
+head(x)

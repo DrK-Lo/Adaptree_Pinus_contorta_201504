@@ -1,0 +1,265 @@
+---
+title: "Outlier and Venn Diagram Results from Pinus contorta at different cutoffs"
+author: "Katie Lotterhos"
+date: "April 16, 2015"
+output: html_document
+---
+Data used here is stored on hulk at /data/seqcap/pine/bwa_pseudo/round2_bams/bayenvResults20150416
+
+In this analysis, we ran bayenv2 (Gunther and Coop 2013) on over 1,000,000 SNPs from the Pine sequence capture.  We had 22 environmental variables of biological interest.
+
+```{r, echo=FALSE}
+### set the wd
+setwd("~/Desktop/bayenvResults20150416") #on Mac Pro
+if(!("rmarkdown" %in% installed.packages())) {install.packages("rmarkdown", dependencies=TRUE)}
+if(!("limma" %in% installed.packages())) {
+  source("http://www.bioconductor.org/biocLite.R")
+  biocLite("limma")
+  }
+if(!("xtable" %in% installed.packages())) {install.packages("xtable", dependencies=TRUE)}
+library(rmarkdown)
+library(limma)
+library(xtable)
+### rmarkdown::render("driverProcessBayenvResults4VennResults.Rmd")
+````
+
+### Information about this R session
+```{r}
+sessionInfo()
+```
+
+### The environmental variables used in this study
+
+We performed a hierarchical cluster analysis on the 22 environmental variables as a way to summarize the outliers and account for correlated variables.
+```{r}
+env <- read.table("sprucePineEnvi.clusters", header=TRUE)
+env
+````
+
+In the table above, column G3 represents the group from the hierarchical clustering.  For analysis, we took out Latitude, Longitude, and Elevation and analyzed them separately because they do not represent environments per se but rather variables that correlate with other selective pressures that we didn't measure (for example elevation may correlate with UV exposure).  So column G4 was used for analysis.
+
+An image of the clustered environments for pine:
+![cluster image](pineClusters.png)
+
+The environments cluster into three groups.  Group 1 contains variables that correlate with mean annual temperature, Group 2 contains variables that correlate with mean annual precipitation, and Group 3 contains variables that correlate with frost-free period.
+
+
+### The SNP dataset 
+
+Here are the column names in the SNP dataset: (the ones named after the environments contain Bayes Factors.  "rho" represents Spearman's rho, which indicates the correlation between the reference SNP frequency and the environment.)
+
+```{r}
+filename <- "var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10"
+### read in file with log-BF
+  if(!("f2" %in% ls())){
+    f2<- read.table(filename, header=TRUE, comment.char="")
+  }
+  names(f2)
+```
+
+The total number of SNPs used for analysis:
+```{r}
+nrow(f2)
+```
+
+The Bayes factors from all environments were pooled to calculate cutoffs for the 0.9999, 0.999, 0.99 and 0.95 quartiles of the BF distribution.  Here are the BF cutoffs for those percentiles:
+```{r}
+### read in file with cutoffs
+  cos <- read.table(paste(filename,".cutoffs", sep=""), header=TRUE)
+  cos
+```
+
+Now loop through each of these cutoffs (except for max) and summarize the results:
+
+```{r xtable kable, echo=FALSE, results='asis'}
+ colBF <- which(names(f2) %in% env$enviAbb)
+  groupsize <- tapply(env$G4,env$G4, length)
+  groupsize2 <- groupsize[2:4]/sum(groupsize[2:4])
+
+  which.cutoffs <- 1:2
+  envitable <- envitable.perc <- data.frame(env[,1:2])
+  LLEtable <- data.frame(Category = c("LAT", "LONG", "ELEVATION"))
+  LLEtable.perc <- LLEtable 
+  Grouptable <- Grouptable.perc <- data.frame(Category = c("Group 1 (temp)", "Group 2 (precip)", "Group 3 (frost-free)"))
+  
+  Grouptable.scaled <- Grouptable.scaled.perc <- data.frame(Category = c("Group 1 (temp) scaled", "Group 2 (precip) scaled", "Group 3 (frost-free) scaled"))
+
+### for each cutoff, 
+  f3 <- f2
+
+  for (i in which.cutoffs){
+    BFcutoff <- round(cos[1,i],3)
+    cutoff <- names(cos[i])
+    cat("\n")
+    cat(paste ("### Results for", cutoff, "percentile, which corresponds to a BF of", BFcutoff, "..."))
+    cat("\n")
+    
+    ### convert bF columns to T/F for outliers
+      f3[,colBF] <- f2[,colBF] > BFcutoff
+      #head(f3[,colBF])
+      overall.out <- rowSums(f3[,colBF])>0  
+     cat("\n")
+      cat(paste("#### Total number of outliers (loci with BF above threshold in any one environment):", sum(overall.out, na.rm=TRUE)), "\n")
+     cat("#### Venn diagrams of overlap among variables.  Raw counts on left column, percentages on right column:", "\n")
+    
+    
+    ### number of outliers in each environment
+      numOutliers <-  as.numeric(unlist(colSums(f3[,colBF], na.rm=TRUE)))
+      perc.outliers <- numOutliers/sum(numOutliers)
+    #print(numOutliers)
+      envitable <- data.frame(envitable,numOutliers)
+      envitable.perc <- data.frame(envitable.perc, perc.outliers)
+      colnames(envitable)[ncol(envitable)] <- paste("numOutliers", cutoff, sep=".")
+    colnames(envitable.perc)[ncol(envitable)] <- paste("percOfOutliers", cutoff, sep=".")
+    
+    ### outliers in lat long elevation
+    LLE <- c(sum(f3$LAT, na.rm=TRUE), sum(f3$LONG, na.rm=TRUE), sum(f3$ELEVATION, na.rm=TRUE))
+    LLEtable <- data.frame(LLEtable, LLE)  
+    LLEtable.perc <- data.frame(LLEtable.perc,LLE/sum(LLE))
+    colnames(LLEtable)[ncol(LLEtable)] <- paste("numOutliers", cutoff, sep=".")
+    colnames(LLEtable.perc)[ncol(LLEtable)] <- paste("percOfOutliers", cutoff, sep=".")
+    
+    ### compute outliers for each cluster (3 columns) 
+      G1cols <- which(names(f3) %in% env$enviAbb[env$G4==1])
+      G2cols <- which(names(f3) %in% env$enviAbb[env$G4==2])
+      G3cols <- which(names(f3) %in% env$enviAbb[env$G4==3])
+      ### unit test
+       if((length(G1cols) + length(G2cols) + length(G3cols))!=19){print("Error in envi clusters")}
+      G1 <- rowSums(f3[,G1cols])>0
+      G2 <- rowSums(f3[,G2cols])>0
+      G3 <- rowSums(f3[,G3cols])>0
+    
+      G123 <- c(sum(G1, na.rm=TRUE), sum(G2, na.rm=TRUE), sum(G3, na.rm=TRUE))
+      Grouptable <- data.frame(Grouptable, G123) #, G123/sum(G123))
+      Grouptable.perc <- data.frame(Grouptable.perc, G123/sum(G123))
+      colnames(Grouptable)[ncol(Grouptable)] <- paste("numOutliers", cutoff, sep=".")
+      colnames(Grouptable.perc)[ncol(Grouptable)] <- paste("numOutliers", cutoff, sep=".")
+      
+      G123scaled <- c(round(sum(G1, na.rm=TRUE)/groupsize[2],1),
+                      round(sum(G2, na.rm=TRUE)/groupsize[3],1),
+                      round(sum(G3, na.rm=TRUE)/groupsize[4],1)
+                      )
+    Grouptable.scaled <- data.frame(Grouptable.scaled, G123scaled) #, G123scaled/sum(G123scaled))
+    Grouptable.scaled.perc <- data.frame(Grouptable.scaled.perc, G123scaled/sum(G123scaled))
+      colnames(Grouptable.scaled)[ncol(Grouptable.scaled)] <- paste("numOutliers", cutoff, sep=".")
+      colnames(Grouptable.scaled.perc)[ncol(Grouptable.scaled)] <- paste("percOfOutliers", cutoff, sep=".")
+       
+    
+      f3b <- data.frame(f3, G1, G2, G3, overall.out)
+      
+      #write.table(f3, paste(filename,"gt", names(cos[i]), sep=""))
+    
+      ### Venn diagram for Lat/Long/Elevation
+      c1 <- names(f3b) %in% c("LAT", "LONG", "ELEVATION")
+      TF.LLE <- f3b[,c1]
+      counts.LLE <- vennCounts(TF.LLE)
+      perc.LLE <- counts.LLE
+      perc.LLE[1,4] <- 0
+      perc.LLE[,4] <- round(perc.LLE[,4]/sum(perc.LLE[,4])*100,1)
+      
+      ### Venn diagram for G1/G2/G3
+      c2 <- names(f3b) %in% c("G1", "G2", "G3")
+      TF.Gs <- f3b[,c2]
+      counts.Gs <- vennCounts(TF.Gs)
+      perc.Gs <- counts.Gs
+      perc.Gs[1,4] <- 0
+      perc.Gs[,4] <- round(perc.Gs[,4]/sum(perc.Gs[,4])*100,1)
+    
+    par(mfrow=c(2,2), mar=c(0,0,2,1), oma=c(0,0,0,0), cex=0.8)
+      vennDiagram(counts.LLE, main = paste(cutoff, "Counts, BF >", BFcutoff))
+      vennDiagram(perc.LLE, main = paste(cutoff, " Percents, BF >", BFcutoff))
+      vennDiagram(counts.Gs, main = paste("Unscaled", cutoff, " Counts, BF >", BFcutoff))
+      vennDiagram(perc.Gs, main = paste("Unscaled", cutoff, " Percents, BF >", BFcutoff))
+cat("\n")
+      
+  }# end loop
+
+cat("\n") 
+cat("### Number of outliers based on different cutoffs")
+      ### output number of outliers for each environment
+      cat("\n")      
+      cat(paste ("#### The number of outliers in each environmental variable with BF >", BFcutoff,  "\n"))
+      print(xtable(envitable), type="html")
+      #print(xtable(envitable.perc), type="html")
+      
+      cat("\n")
+      cat(paste ("#### The number of outliers for just Lat, Long, and Elevation with BF >", BFcutoff,  "\n"))
+      print(xtable(LLEtable), type="html")
+      #print(xtable(LLEtable.perc), type="html")
+      
+      cat("\n")
+      cat(paste ("#### The number of outliers for the three environmental groups with BF >", BFcutoff,  "\n"))
+      print(xtable(Grouptable), type="html")
+      #print(xtable(Grouptable.perc), type="html")
+      
+      cat("\n", "\n")
+      cat(paste ("#### The number of outliers for the three environmental groups scaled by the number of variables in each group with BF >", BFcutoff,  "\n"))
+      print(xtable(Grouptable.scaled), type="html")
+      #print(xtable(Grouptable.scaled.perc), type="html")
+    cat("\n")
+```
+
+
+### Proportion of outliers based on different cutoffs
+```{r, fig.width=10, fig.height=5, echo=FALSE}
+      rownames(envitable.perc) <- env$enviAbb
+      dat <- as.matrix(t(envitable.perc[3:ncol(envitable.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  ylim=c(0,0.2),
+                  xlab="", xaxt="n")
+
+      text(a[1,]+0.5, par("usr")[3]-0.03, 
+     srt = 90, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=1)
+```
+
+
+```{r, fig.width=5, fig.height=6, echo=FALSE}
+      rownames(LLEtable.perc) <- LLEtable.perc[,1]
+      dat <- as.matrix(t(LLEtable.perc[2:ncol(LLEtable.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  #ylim=c(0,0.2),
+                  #xlab="", xaxt="n"
+                  )
+
+     # text(a[1,]+0.5, par("usr")[3]-0.03, 
+     #srt = 90, adj= 1, xpd = TRUE,
+     #labels = paste(colnames(dat)), cex=1)
+```
+
+
+```{r, fig.width=8, fig.height=6, echo=FALSE}
+      rownames(Grouptable.perc) <- Grouptable.perc[,1]
+      dat <- as.matrix(t(Grouptable.perc[2:ncol(Grouptable.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  #ylim=c(0,0.2),
+                  #xlab="", xaxt="n"
+                  )
+
+    #  text(a[1,]+0.5, par("usr")[3]-0.03, 
+    # srt = 90, adj= 1, xpd = TRUE,
+    # labels = paste(colnames(dat)), cex=1)
+```
+
+
+```{r, fig.width=8, fig.height=6, echo=FALSE}
+      rownames(Grouptable.scaled.perc) <- Grouptable.scaled.perc[,1]
+      dat <- as.matrix(t(Grouptable.scaled.perc[2:ncol(Grouptable.scaled.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  #ylim=c(0,0.2),
+                  #xlab="", xaxt="n"
+                  )
+
+    #  text(a[1,]+0.5, par("usr")[3]-0.03, 
+    # srt = 90, adj= 1, xpd = TRUE,
+    # labels = paste(colnames(dat)), cex=1)
+```
+

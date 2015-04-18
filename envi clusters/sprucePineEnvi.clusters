@@ -1,0 +1,23 @@
+"enviAbb" "enviDesc" "G3" "G4"
+"LAT" "Latitude" 1 0
+"LONG" "Longitude" 2 0
+"ELEVATION" "Elevation" 3 0
+"MAT" "Mean ann. temp" 1 1
+"MWMT" "Mean warmest month" 3 3
+"MCMT" "Mean coldest month" 1 1
+"TD" "Temp difference" 1 1
+"MAP" "Mean annual precipitation" 2 2
+"MSP" "Mean summer precipitation" 2 2
+"AHM" "Anuual heat:moisture index" 2 2
+"SHM" "Summer heat:moisture index" 2 2
+"DD_0" "Days < 0C" 1 1
+"DD5" "Days > 5C" 3 3
+"NFFD" "# frost-free days" 3 3
+"bFFP" "Begin frost-free period" 3 3
+"eFFP" "End frost-free period" 3 3
+"FFP" "Frost-free period" 3 3
+"PAS" "Precipitation as snow" 2 2
+"EMT" "Extreme min. temp 30 years" 1 1
+"EXT" "Extreme max. temp 30 years" 2 2
+"Eref" "Evaporation" 2 2
+"CMD" "Climate moisture deficit" 2 2
