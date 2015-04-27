@@ -6,7 +6,7 @@ filename <- "/data/seqcap/pine/bwa_pseudo/round2_bams/bayenvResults20150416/var_
  f2<- read.table(filename, header=TRUE, comment.char="")
 ### read in environment file and environment clusters
   env <- read.table("/data/seqcap/pine/bwa_pseudo/round2_bams/bayenvResults20150416/sprucePineEnvi.clusters", header=TRUE)
-
+  env <- read.table("sprucePineEnvi.clusters", header=TRUE)
 ### get columns of BF
   head(env)
   names(f2)
@@ -21,3 +21,8 @@ filename <- "/data/seqcap/pine/bwa_pseudo/round2_bams/bayenvResults20150416/var_
   cos
   ### write cutoffs to file
  write.table(cos, paste(filename,".cutoffs", sep=""), row.names=FALSE)
+
+### Calculate XTX cutoffs
+  cx <- get.cutoffs(f2$xtx)
+  cx
+  write.table(cx, paste(filename,".XTXcutoffs", sep=""), row.names=FALSE)
