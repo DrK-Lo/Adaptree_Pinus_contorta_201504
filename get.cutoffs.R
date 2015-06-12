@@ -14,3 +14,20 @@
 	V.90 <- sort.BF[round(n*.90,0)]
     return(data.frame(V.99999, V.9999, V.9995, V.999, V.99, V.95, V.90, max.V))
   }
+ 
+  get.cutoffs.p <- function(var){
+   var2 <- as.vector(unlist(var), mode="numeric") #slow for large dataframe
+	#length(var2)
+    sort.BF<- sort(var2)
+    #hist(sort.BF)
+    n <- length(sort.BF)
+    max.V <- sort.BF[1]
+	V.99999 <- sort.BF[round(n*(1-.99999),0)]
+	V.9999 <- sort.BF[round(n*(1-.9999),0)]
+	V.9995 <- sort.BF[round(n*(1-.9995),0)]
+    V.999 <- sort.BF[round(n*(1-.999),0)]
+    V.99 <- sort.BF[round(n*(1-.99),0)]
+    V.95 <- sort.BF[round(n*(1-.95),0)]
+	V.90 <- sort.BF[round(n*(1-.90),0)]
+    return(data.frame(V.99999, V.9999, V.9995, V.999, V.99, V.95, V.90, max.V))
+  }

@@ -1,0 +1,204 @@
+---
+title: "Outlier and Venn Diagram Results from Pinus contorta at different cutoffs for the PC environments"
+author: "Katie Lotterhos"
+date: "April 16, 2015"
+output: html_document
+---
+Data used here is stored on hulk at /data/seqcap/pine/bwa_pseudo/round2_bams/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window_RESULTS.  It was transferred to my laptop to make the markdown files
+
+```{r, echo=FALSE, eval=FALSE}
+rmarkdown::render("driverProcessBayenvResults4VennResultsv3_pcabayenv.Rmd")
+```
+
+In this analysis, we ran bayenv2 (Gunther and Coop 2013) on over 1,000,000 SNPs from the Pine sequence capture.  We had 22 Principal components calculated from the environmental variables.  See the environmentSummary.html for a summary of these principal components.
+
+```{r, echo=FALSE}
+### set the wd
+setwd("/Users/katie/Desktop/current projects/1-AdaptreeData/2015_POST_FILTERING/pine_src") #on Mac Pro
+if(!("rmarkdown" %in% installed.packages())) {install.packages("rmarkdown", dependencies=TRUE)}
+if(!("limma" %in% installed.packages())) {
+  source("http://www.bioconductor.org/biocLite.R")
+  biocLite("limma")
+  }
+if(!("xtable" %in% installed.packages())) {install.packages("xtable", dependencies=TRUE)}
+library(rmarkdown)
+library(limma)
+library(xtable)
+### rmarkdown::render("driverProcessBayenvResults4VennResultsv3.Rmd")
+````
+
+### Information about this R session
+```{r session}
+sessionInfo()
+```
+
+### The SNP dataset 
+
+Here are the column names in the SNP dataset: (the ones named after the environments contain Bayes Factors.  "rho" represents Spearman's rho, which indicates the correlation between the reference SNP frequency and the environment.)
+
+```{r read in file}
+#filename <- "var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10"
+filename <- "../pine_data/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window_RESULTS.log10bf"
+#filename <- "../pine_data/bayenv.lfmmbeagle.res"
+### read in file with log-BF
+  if(!("f2" %in% ls())){
+    f2 <- read.table(filename, header=TRUE, comment.char="&")
+  }
+  names(f2)
+
+env <- read.table("../pine_data/sprucePineEnvi.clusters", header=TRUE)
+env <- env[order(env$G4),]
+```
+
+
+The total number of SNPs used for analysis:
+```{r}
+nrow(f2)
+```
+
+The Bayes factors from all environments were pooled to calculate cutoffs for the different quartiles of the BF distribution.  Here I used the same cutoffs used in the other analysis, BUT THIS MAY BE SOMETHING WE WANT TO CHANGE IN THE FUTURE!  On quick inspection, the average BF and max BF were similar for both.
+
+Here are the BF cutoffs for those percentiles:
+```{r BF cutoffs}
+### read in file with cutoffs
+  cos <- read.table("../pine_data/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10.cutoffs", header=TRUE)
+  cos <- rev(cos)
+  cos[1] <- -99
+  names(cos)[1] <- "All"
+  cos
+```
+
+
+#### Now loop through some these cutoffs and summarize the results for environment enrichment:
+
+```{r loop through cutoffs Venn xtables, echo=FALSE, results='asis'}
+    colBF <- which(names(f2) %in% paste("PCA", 1:22, sep=""))
+
+  which.cutoffs <- c(1, 4:8)
+
+### for each cutoff, 
+  f3 <- f2
+  envitable <- envitable.perc <- data.frame(PC = paste("PCA", 1:22, sep=""))
+  for (i in which.cutoffs){
+    BFcutoff <- round(cos[1,i],3)
+    cutoff <- names(cos[i])
+  
+    ### convert bF columns to T/F for outliers
+      f3[,colBF] <- f2[,colBF] > BFcutoff
+      #head(f3[,colBF])
+      overall.out <- rowSums(f3[,colBF])>0  
+     cat("\n")
+
+    
+    ### number of outliers in each environment
+      numOutliers <-  as.numeric(unlist(colSums(f3[,colBF], na.rm=TRUE)))
+      perc.outliers <- numOutliers/sum(numOutliers)
+    #print(numOutliers)
+      envitable <- data.frame(envitable, numOutliers)
+      envitable.perc <- data.frame(envitable.perc, perc.outliers)
+      colnames(envitable)[ncol(envitable)] <- paste("numOutliers", cutoff, sep=".")
+    colnames(envitable.perc)[ncol(envitable)] <- paste("percOfOutliers", cutoff, sep=".")
+    }
+
+cat("\n") 
+cat("### Number of outliers based on different cutoffs")
+      ### output number of outliers for each environment
+      cat("\n")      
+      cat(paste ("#### The number of outliers in each PC",  "\n"))
+      envitable[,3:ncol(envitable)] <- round(envitable[,3:ncol(envitable)],0)
+      print(xtable(envitable), type="html", digits=0)
+      #print(xtable(envitable.perc), type="html")
+      
+```
+
+
+### Proportion of outliers based on different cutoffs
+```{r barplot envitable, fig.width=10, fig.height=5, echo=FALSE}
+      rownames(envitable.perc) <- paste("PCA", 1:22, sep="")
+      dat <- as.matrix(t(envitable.perc[2:ncol(envitable.perc)]))
+      par(mar=c(6,4,1,1))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  ylim=c(0,1),
+                  xlab="", xaxt="n")
+
+      text(a[4,]+0.5, par("usr")[3]-0.03, 
+     srt = 90, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=0.8)
+```
+
+ Results are encouraging - we don't see any enrichment of large BF at the larger PC axes, which explain less of the variation in the environments.  Most adaptation seems to be occuring on PC1 and PC3.  Here is a summary, but see the environmentSummary.html for information on the PC axes. 
+
+Variables strongly associated with PC1 include DD_0/bFFP/elevation (days $<$ 0C and begin frost-free) at the negative end, and NFFD/DD5/MAT (# frost free days, days $>$ 5C, and mean annual temp) at the positive end.
+
+Variables associated with PC2 include AHM/TD/SHM (annual heat:moisture, temp difference, and summer heat:moisture) at the negative end and MCMT/PAS/MAP at the positive end (mean coldest month, precipitation as snow, and mean annual precip).
+
+Variables associated with PC3 include LAT/FFP/TD (latitude, frost-free period, and temp difference) at the negative end and CMD/Elevation/bFFP (climate moisture deficit) at the positive end.
+
+Overall, these results echo the results from the analysis based on individual environments - lots of adaptation to temperature and less to precipitation.  An important difference to note is that this analysis indicates a substantial amount of adaptation to elevation and frost periods (indicated by their loadings on PC1 and PC3).  Maybe the PC captures frost and elevation better than those variables alone, because they are confounded with latitude?
+
+Populations that have extreme values of PC1/PC3 include 118, 204, 205, 215, 216, and 212.  I'd be interested to learn more about these populations.
+
+#### Now loop through some these cutoffs and summarize the results for enrichment of different genomic categories:
+
+There are two approaches toward looking at enrichment: based on annotation category, or based on the set of non-coding SNPs used in the covariance matrix.
+
+##### Results based on annotation category
+
+Here, for each locus I used the maximum log10(BF) observed in any one environment.  Then, I made a new annotation category that lumped together all non-synomymous SNPs. Next, I compared the proportion of SNPs in each annotation category for progressively more stringent cutoffs:
+
+
+```{r annotation enrichment}
+  levels(f2$X_annotation)
+
+### Make a new annotation category
+    new.annot <- as.character(unlist(f2$X_annotation))
+    new.annot[grep("nonsyn", f2$X_annotation)] <- "nonsyn"
+    new.annot <- as.factor(new.annot)
+    levels(new.annot)
+
+### Calculate the max(BF) for a locus across all environments
+  options(warn = -1)
+  max.BF <- apply(f2[,colBF], 1, max, na.rm=TRUE)
+  max.BF[is.infinite(max.BF)]<-NA
+  
+### functions to get proportions
+get.prop.newannot <- function(V, ind, rowname=NULL){
+  a<- tapply(V[ind], new.annot[ind], length)
+  a2<- data.frame(t(a/sum(a, na.rm=TRUE)))
+  rownames(a2) <- rowname
+  a2
+  }
+
+### For barplot, x-axis categories are in columns and colored bars are in rows
+  enrich.new.annot <- data.frame(cutoff="All", get.prop.newannot(max.BF, TRUE))
+
+  cutoff2 <- as.numeric(cos[1,4:8])
+  cutoff2names <- names(cos[1,4:8])
+  for (i in 1:length(cutoff2)){
+    n2 <- data.frame(cutoff=cutoff2names[i], get.prop.newannot(max.BF, max.BF>=cutoff2[i]) )
+    print(length(n2))
+    enrich.new.annot<- merge(enrich.new.annot, n2, all.x=TRUE, all.y=TRUE)
+  }
+```
+
+
+```{r barplot annotation, fig.width=10, fig.height=5, echo=FALSE}
+### For barplot, x-axis categories are in columns and colored bars are in rows
+      rownames(enrich.new.annot) <- enrich.new.annot[,1]
+      dat <- as.matrix(enrich.new.annot[,-1]) #removing the names
+      rm <- which(colnames(dat) %in% c("X3primeFLANK", "X5primeFLANK", "HAS_INDEL", "mismatch_altref", "multi.allelic", "unk_adj", "unk_flank"))
+      dat <- dat[,-rm]
+      par(mar=c(6,4,1,1))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=rownames(enrich.new.annot), 
+                  ylim=c(0,0.75), xlim=c(0,130),
+                  xlab="", xaxt="n",
+                  args.legend=list(x=20,y=0.6))
+
+      text(a[4,], par("usr")[3]-0.03, 
+     srt = 60, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=0.8)
+```

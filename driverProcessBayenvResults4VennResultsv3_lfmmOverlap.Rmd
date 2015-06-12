@@ -1,0 +1,411 @@
+---
+title: "Outlier and Venn Diagram Results from Pinus contorta at different cutoffs FOR BAYENV SNPS THAT OVERLAP WITH LFMM ANALYSIS (see emails from Simon)"
+author: "Katie Lotterhos"
+date: "April 16, 2015"
+output: html_document
+---
+Data used here is stored on hulk at /data/seqcap/pine/bwa_pseudo/round2_bams/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window_RESULTS.  It was transferred to my laptop to make the markdown files.
+
+
+```{r, echo=FALSE, eval=FALSE}
+rmarkdown::render("driverProcessBayenvResults4VennResultsv3_lfmmOverlap.Rmd")
+```
+
+In this analysis, we ran bayenv2 (Gunther and Coop 2013) on over 1,000,000 SNPs from the Pine sequence capture.  We had 22 environmental variables of biological interest.  In this document, I subset the results to coincide with the SNPs that were also run for LFMM, so we could determine whether the story depended on the method or on the filtering criteria.
+
+For the most part, these results are consistent with the entire set of SNPs (but still different in some instances from LFMM), indicating that there are some subtle differences between the programs in how they determine whether a SNP is significantly associated with the environment.  **Reasons for this are explained at the end of the file.**
+
+```{r, echo=FALSE}
+### set the wd
+setwd("/Users/katie/Desktop/current projects/1-AdaptreeData/2015_POST_FILTERING/pine_src") #on Mac Pro
+if(!("rmarkdown" %in% installed.packages())) {install.packages("rmarkdown", dependencies=TRUE)}
+if(!("limma" %in% installed.packages())) {
+  source("http://www.bioconductor.org/biocLite.R")
+  biocLite("limma")
+  }
+if(!("xtable" %in% installed.packages())) {install.packages("xtable", dependencies=TRUE)}
+library(rmarkdown)
+library(limma)
+library(xtable)
+````
+
+### Information about this R session
+```{r session}
+sessionInfo()
+```
+
+### The SNP dataset 
+
+Here are the column names in the SNP dataset: (the ones named after the environments contain Bayes Factors.  "rho" represents Spearman's rho, which indicates the correlation between the reference SNP frequency and the environment.)
+
+```{r read in file}
+#filename <- "var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10"
+#filename <- "../pine_data/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window_RESULTS"
+filename <- "../pine_data/bayenv.lfmmbeagle.res"
+### read in file with log-BF
+  if(!("f2" %in% ls())){
+    f2<- read.table(filename, header=TRUE, comment.char="&")
+  }
+  
+  names(f2)
+
+  #These new lines of code are to take the bayenv subset that is the same as lfmm
+  lfmmcols <- grep("lfmm.beagle", names(f2))
+  a<- is.na(f2[,lfmmcols])
+  head(a)
+  a1 <- rowSums(a)==length(lfmmcols) #if all lfmm columns have NA, this is TRUE
+  f2b <- f2[a1==FALSE,]  # remove the SNPs that were not run in LFMM
+  nrow(f2b)
+
+env <- read.table("../pine_data/sprucePineEnvi.clusters", header=TRUE)
+env <- env[order(env$G4),]
+```
+
+The total number of SNPs used for analysis:
+```{r}
+nrow(f2b)
+```
+
+The Bayes factors from all environments were pooled to calculate cutoffs for the different quartiles of the BF distribution.  Here are the BF cutoffs for those percentiles:
+```{r BF cutoffs}
+### read in file with cutoffs
+  cos <- read.table("../pine_data/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10.cutoffs", header=TRUE)
+  cos <- rev(cos)
+  cos[1] <- -99
+  names(cos)[1] <- "All"
+  cos
+```
+
+And here are the quartiles for $X^TX$ (note that I haven't done any analysis with these yet):
+```{r XTX cutoffs}
+### read in file with cutoffs
+  cx <- read.table("../pine_data/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10.XTXcutoffs", header=TRUE)
+  cx
+```
+
+
+#### Now loop through some these cutoffs and summarize the results for environment enrichment:
+
+```{r loop through cutoffs Venn xtables, echo=FALSE, results='asis'}
+   colBF <- c()
+    for (i in 1:22){
+      colBF[i] <- which(names(f2b)==env$enviAbb[i])
+      }
+  ### unit test
+  if(!identical(names(f2b)[colBF],as.character(env$enviAbb))){print("Error in matching names"); break}
+
+  groupsize <- tapply(env$G4,env$G4, length)
+  groupsize2 <- groupsize[2:4]/sum(groupsize[2:4])
+
+  which.cutoffs <- c(1, 4:8)
+  envitable <- envitable.perc <- data.frame(env[,1:2])
+  LLEtable <- data.frame(Category = c("LAT", "LONG", "ELEVATION"))
+  LLEtable.perc <- LLEtable 
+  Grouptable <- Grouptable.perc <- data.frame(Category = c("Group 1 (temp)", "Group 2 (precip)", "Group 3 (frost-free)"))
+  
+  Grouptable.scaled <- Grouptable.scaled.perc <- data.frame(Category = c("Group 1 (temp) scaled", "Group 2 (precip) scaled", "Group 3 (frost-free) scaled"))
+
+### for each cutoff, 
+  f3 <- f2b
+
+  for (i in which.cutoffs){
+    BFcutoff <- round(cos[1,i],3)
+    cutoff <- names(cos[i])
+  
+    
+    ### convert bF columns to T/F for outliers
+      f3[,colBF] <- f2b[,colBF] > BFcutoff
+      #head(f3[,colBF])
+      overall.out <- rowSums(f3[,colBF])>0  
+     cat("\n")
+
+    
+    ### number of outliers in each environment
+      numOutliers <-  as.numeric(unlist(colSums(f3[,colBF], na.rm=TRUE)))
+      perc.outliers <- numOutliers/sum(numOutliers)
+    #print(numOutliers)
+      envitable <- data.frame(envitable, numOutliers)
+      envitable.perc <- data.frame(envitable.perc, perc.outliers)
+      colnames(envitable)[ncol(envitable)] <- paste("numOutliers", cutoff, sep=".")
+    colnames(envitable.perc)[ncol(envitable)] <- paste("percOfOutliers", cutoff, sep=".")
+    
+    ### outliers in lat long elevation
+    LLE <- c(sum(f3$LAT, na.rm=TRUE), sum(f3$LONG, na.rm=TRUE), sum(f3$ELEVATION, na.rm=TRUE))
+    LLEtable <- data.frame(LLEtable, LLE)  
+    LLEtable.perc <- data.frame(LLEtable.perc,LLE/sum(LLE))
+    colnames(LLEtable)[ncol(LLEtable)] <- paste("numOutliers", cutoff, sep=".")
+    colnames(LLEtable.perc)[ncol(LLEtable)] <- paste("percOfOutliers", cutoff, sep=".")
+    
+    ### compute outliers for each cluster (3 columns) 
+      G1cols <- which(names(f3) %in% env$enviAbb[env$G4==1])
+      G2cols <- which(names(f3) %in% env$enviAbb[env$G4==2])
+      G3cols <- which(names(f3) %in% env$enviAbb[env$G4==3])
+      ### unit test
+       if((length(G1cols) + length(G2cols) + length(G3cols))!=19){print("Error in envi clusters")}
+      G1 <- rowSums(f3[,G1cols])>0
+      G2 <- rowSums(f3[,G2cols])>0
+      G3 <- rowSums(f3[,G3cols])>0
+    
+      G123 <- c(sum(G1, na.rm=TRUE), sum(G2, na.rm=TRUE), sum(G3, na.rm=TRUE))
+      Grouptable <- data.frame(Grouptable, G123) #, G123/sum(G123))
+      Grouptable.perc <- data.frame(Grouptable.perc, G123/sum(G123))
+      colnames(Grouptable)[ncol(Grouptable)] <- paste("numOutliers", cutoff, sep=".")
+      colnames(Grouptable.perc)[ncol(Grouptable)] <- paste("numOutliers", cutoff, sep=".")
+      
+      G123scaled <- c(round(sum(G1, na.rm=TRUE)/groupsize[2],1),
+                      round(sum(G2, na.rm=TRUE)/groupsize[3],1),
+                      round(sum(G3, na.rm=TRUE)/groupsize[4],1)
+                      )
+    Grouptable.scaled <- data.frame(Grouptable.scaled, G123scaled) #, G123scaled/sum(G123scaled))
+    Grouptable.scaled.perc <- data.frame(Grouptable.scaled.perc, G123scaled/sum(G123scaled))
+      colnames(Grouptable.scaled)[ncol(Grouptable.scaled)] <- paste("numOutliers", cutoff, sep=".")
+      colnames(Grouptable.scaled.perc)[ncol(Grouptable.scaled)] <- paste("percOfOutliers", cutoff, sep=".")
+       
+    
+      f3b <- data.frame(f3, G1, G2, G3, overall.out)
+      
+      #write.table(f3, paste(filename,"gt", names(cos[i]), sep=""))
+    
+      ### Venn diagram for Lat/Long/Elevation
+      c1 <- names(f3b) %in% c("LAT", "LONG", "ELEVATION")
+      TF.LLE <- f3b[,c1]
+      counts.LLE <- vennCounts(TF.LLE)
+      perc.LLE <- counts.LLE
+      perc.LLE[1,4] <- 0
+      perc.LLE[,4] <- round(perc.LLE[,4]/sum(perc.LLE[,4])*100,1)
+      
+      ### Venn diagram for G1/G2/G3
+      c2 <- names(f3b) %in% c("G1", "G2", "G3")
+      TF.Gs <- f3b[,c2]
+      counts.Gs <- vennCounts(TF.Gs)
+      perc.Gs <- counts.Gs
+      perc.Gs[1,4] <- 0
+      perc.Gs[,4] <- round(perc.Gs[,4]/sum(perc.Gs[,4])*100,1)
+    
+    if (i > 5){
+    cat(paste ("### Results for", cutoff, "percentile, which corresponds to a BF of", BFcutoff, "..."))
+    cat("\n")
+      cat(paste("#### Total number of outliers (loci with BF above threshold in any one environment):", sum(overall.out, na.rm=TRUE)), "\n")
+     cat("#### Venn diagrams of overlap among variables.  Raw counts on left column, percentages on right column:", "\n", "Note that the number in the bottom right corner of the Venn represents the number of SNPs that do not fit into any category and can be ignored.",  "\n")
+       cat("\n")
+    par(mfrow=c(2,2), mar=c(0,0,2,1), oma=c(0,0,0,0), cex=0.8)
+      vennDiagram(counts.LLE, main = paste(cutoff, "Counts, BF >", BFcutoff), cex=rep(0.7,3))
+      vennDiagram(perc.LLE, main = paste(cutoff, " Percents, BF >", BFcutoff), cex=rep(0.7,3))
+      vennDiagram(counts.Gs, main = paste("Unscaled", cutoff, " Counts, BF >", BFcutoff),cex=rep(0.7,3))
+      vennDiagram(perc.Gs, main = paste("Unscaled", cutoff, " Percents, BF >", BFcutoff),cex=rep(0.7,3))
+    }
+cat("\n")
+      
+  }# end loop
+
+cat("\n") 
+cat("### Number of outliers based on different cutoffs")
+      ### output number of outliers for each environment
+      cat("\n")      
+      cat(paste ("#### The number of outliers in each environmental variable",  "\n"))
+      envitable[,3:ncol(envitable)] <- round(envitable[,3:ncol(envitable)],0)
+      print(xtable(envitable), type="html", digits=0)
+      #print(xtable(envitable.perc), type="html")
+      
+      cat("\n")
+      cat(paste ("#### The number of outliers for just Lat, Long, and Elevation", "\n"))
+      print(xtable(LLEtable), type="html")
+      #print(xtable(LLEtable.perc), type="html")
+      
+      cat("\n")
+      cat(paste ("#### The number of outliers for the three environmental groups",  "\n"))
+      print(xtable(Grouptable), type="html")
+      #print(xtable(Grouptable.perc), type="html")
+      
+      cat("\n", "\n")
+      cat(paste ("#### The number of outliers for the three environmental groups scaled by the number of variables in each group",  "\n", "Note that because of the scaling these are not whole numbers."))
+      print(xtable(Grouptable.scaled), type="html")
+      #print(xtable(Grouptable.scaled.perc), type="html")
+    cat("\n")
+```
+
+
+### Proportion of outliers based on different cutoffs
+```{r barplot envitable, fig.width=10, fig.height=5, echo=FALSE}
+      rownames(envitable.perc) <- env$enviAbb
+      dat <- as.matrix(t(envitable.perc[3:ncol(envitable.perc)]))
+      dat <- dat[,4:ncol(dat)]
+      par(mar=c(6,4,1,1))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  ylim=c(0,0.3),
+                  xlab="", xaxt="n")
+
+      text(a[4,]+0.5, par("usr")[3]-0.03, 
+     srt = 90, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=0.8)
+```
+
+See the environmentSummary.html for information on the environments and their abbreviations. The x-axis is sorted according to groups.  MAT to EMT is Group 1; MAP to CMD is Group 2, and MWMT to FFP is Group 3.
+
+```{r barplot LLEtable, fig.width=5, fig.height=6, echo=FALSE}
+      rownames(LLEtable.perc) <- LLEtable.perc[,1]
+      dat <- as.matrix(t(LLEtable.perc[2:ncol(LLEtable.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  ylim=c(0,1)
+                  #xlab="", xaxt="n"
+                  )
+
+     # text(a[1,]+0.5, par("usr")[3]-0.03, 
+     #srt = 90, adj= 1, xpd = TRUE,
+     #labels = paste(colnames(dat)), cex=1)
+```
+
+Similar to results from all SNPs.
+
+```{r barplot grouptable, fig.width=8, fig.height=6, echo=FALSE}
+      rownames(Grouptable.perc) <- Grouptable.perc[,1]
+      dat <- as.matrix(t(Grouptable.perc[2:ncol(Grouptable.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  #ylim=c(0,0.2),
+                  #xlab="", xaxt="n"
+                  )
+
+    #  text(a[1,]+0.5, par("usr")[3]-0.03, 
+    # srt = 90, adj= 1, xpd = TRUE,
+    # labels = paste(colnames(dat)), cex=1)
+```
+
+
+```{r barplot scaled grouptable, fig.width=8, fig.height=6, echo=FALSE}
+      rownames(Grouptable.scaled.perc) <- Grouptable.scaled.perc[,1]
+      dat <- as.matrix(t(Grouptable.scaled.perc[2:ncol(Grouptable.scaled.perc)]))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  #ylim=c(0,0.2),
+                  #xlab="", xaxt="n"
+                  )
+
+    #  text(a[1,]+0.5, par("usr")[3]-0.03, 
+    # srt = 90, adj= 1, xpd = TRUE,
+    # labels = paste(colnames(dat)), cex=1)
+```
+
+Similar to results from all SNPs.
+#### Now loop through some these cutoffs and summarize the results for enrichment of different genomic categories:
+
+Similar to results from all SNPs.
+
+##### Results based on annotation category
+
+
+```{r annotation enrichment}
+  levels(f2b$X.annotation)
+
+### Make a new annotation category
+    new.annot <- as.character(unlist(f2b$X.annotation))
+    new.annot[grep("nonsyn", f2b$X.annotation)] <- "nonsyn"
+    new.annot <- as.factor(new.annot)
+    levels(new.annot)
+
+### Calculate the max(BF) for a locus across all environments
+  if(!("max.BFb" %in% ls())){  
+  max.BFb <- apply(f2b[,colBF], 1, max, na.rm=TRUE)
+  max.BFb[is.infinite(max.BFb)]<-NA
+  }
+  
+### functions to get proportions
+get.prop.newannot <- function(V, ind, rowname=NULL){
+  a<- tapply(V[ind], new.annot[ind], length)
+  a2<- data.frame(t(a/sum(a, na.rm=TRUE)))
+  rownames(a2) <- rowname
+  a2
+  }
+
+### For barplot, x-axis categories are in columns and colored bars are in rows
+  enrich.new.annot <- data.frame(cutoff="All", get.prop.newannot(max.BFb, TRUE))
+
+  cutoff2 <- as.numeric(cos[1,4:8])
+  cutoff2names <- names(cos[1,4:8])
+  for (i in 1:length(cutoff2)){
+    n2 <- data.frame(cutoff=cutoff2names[i], get.prop.newannot(max.BFb, max.BFb>=cutoff2[i]) )
+    print(length(n2))
+    enrich.new.annot<- merge(enrich.new.annot, n2, all.x=TRUE, all.y=TRUE)
+  }
+```
+
+
+```{r barplot annotation, fig.width=10, fig.height=5, echo=FALSE}
+### For barplot, x-axis categories are in columns and colored bars are in rows
+      rownames(enrich.new.annot) <- enrich.new.annot[,1]
+      dat <- as.matrix(enrich.new.annot[,-1]) #removing the names
+      rm <- which(colnames(dat) %in% c("X3primeFLANK", "X5primeFLANK", "HAS_INDEL", "mismatch_altref", "multi.allelic", "unk_adj", "unk_flank"))
+      dat <- dat[,-rm]
+      par(mar=c(6,4,1,1))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=rownames(enrich.new.annot), 
+                  ylim=c(0,0.65), xlim=c(0,130),
+                  xlab="", xaxt="n",
+                  args.legend=list(x=20,y=0.6))
+
+      text(a[4,], par("usr")[3]-0.03, 
+     srt = 60, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=0.8)
+```
+
+These results differ slightly from the whole SNP set.
+
+#### Results based on proportion of noncoding SNPs used in covariance matrix
+```{r noncoding enrichment}
+levels(f2b$noncode_in_covar)
+
+get.prop.noncod <- function(V, ind){
+  a<- tapply(V[ind], f2b$noncode_in_covar[ind], length)
+  as.numeric((a/sum(a, na.rm=TRUE))[1])
+  }
+
+  enrich.noncod <- get.prop.noncod(max.BFb, TRUE)
+  for (i in 1:length(cutoff2)){
+    enrich.noncod <- c(enrich.noncod, get.prop.noncod(max.BFb, max.BFb>=cutoff2[i]) )
+  }
+  names(enrich.noncod) <- c("All", cutoff2names)
+  enrich.noncod  
+```
+
+The above vector indicates the proportion of outliers for each cutoff that are non-coding loci used in the covariance matrix.  There is a slight increase with each cutoff, but not a substantial change.
+
+#### Histogram of BF from noncoding SNPs used in covmat vs. other SNPs
+```{r histogram noncoding, fig.height=12}
+ low <- min(max.BFb, na.rm=TRUE)
+ high <- max(max.BFb, na.rm=TRUE)
+levels(f2b$noncode_in_covar)
+#[1] "in_covar" "no" 
+  br <- seq(low-0.2, high+0.2, by=0.2)
+  par(mfcol=c(3,1), mar=c(4,4,1,1), cex=1.2, las=1)
+  hist(max.BFb[f2b$noncode_in_covar=="no"], breaks=br, freq=FALSE, col="darkgrey", xlim=c(-1,5), main="", xlab="Max log10(BF) across environments")
+  hist(max.BFb[f2b$noncode_in_covar=="in_covar"], breaks=br, freq=FALSE, add=TRUE, col=rgb(0,1,0,0.2))
+
+  hist(max.BFb[f2b$noncode_in_covar=="no"], breaks=br, xlim=c(3, 15), freq=FALSE, ylim=c(0,0.004),  main="", xlab="Max log10(BF) across environments", col="darkgrey")
+  hist(max.BFb[f2b$noncode_in_covar=="in_covar"], breaks=br, freq=FALSE, add=TRUE, col=rgb(0,1,0,0.2))
+
+  hist(max.BFb[f2b$noncode_in_covar=="no"], breaks=br, xlim=c(5, high), freq=FALSE, ylim=c(0,0.0001),  main="", xlab="Max log10(BF) across environments", col="grey")
+  hist(max.BFb[f2b$noncode_in_covar=="in_covar"], breaks=br, freq=FALSE, add=TRUE, col=rgb(0,1,0,0.5))
+  legend(20,0.0001, c("Noncoding in covmat", "Not in covmat"), fill=c(rgb(0,1,0,0.5),"grey" ), bty="n")
+```
+
+### Why are these results similar?
+
+1) Because the LFMM dataset only used SNPs that were present in a majority of individuals:
+```{r histogram lfmm, fig.height=8}
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+hist(f2$num_ind, main="All SNPs", xlab="Number Individuals", breaks=seq(0,700,50))
+hist(f2b$num_ind, main="LFMM SNPs", xlab="Number Individuals", breaks=seq(0,700,50))
+```
+
+and 2) Bayes Factors are higher in SNPs that have more data.  (The same thing happens with p-values; they are smaller when we have more data). 
+```{r bf vs num, fig.width=8}
+par(mfrow=c(1,1))
+plot(f2$num_ind, max.BF, bty="l", xlab="Number Individuals")
+```

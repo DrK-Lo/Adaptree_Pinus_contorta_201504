@@ -1,0 +1,17 @@
+---
+title: "Sam’s supercontig analysis"
+author: "Katie Lotterhos"
+date: "May 17, 2015"
+output: html_document
+---
+
+### Enrichment analysis based on Sam's "super-contig" status. 
+
+See Sam's markdown file for how super contigs were analyzed.  He has 4 levels: "bayenv", "both", "neither", "tassel".  Here, I just used a logical (T/F) for the enrichment analysis.  So if a SNP had any of these categories it was considered a super-contig.
+
+Data used here is stored on hulk at /data/seqcap/pine/bwa_pseudo/round2_bams/bayenvResults20150416.  It was transferred to klott@10.122.4.190:/Users/lotterke/Desktop/bayenvResults20150416 to make the markdown files
+
+```{r, echo=FALSE, eval=FALSE}
+rmarkdown::render("driverProcessBayenvResults4VennResultsv3lfmm.Rmd")
+```
+

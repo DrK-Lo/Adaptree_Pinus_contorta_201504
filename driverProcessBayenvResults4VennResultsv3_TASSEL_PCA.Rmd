@@ -1,0 +1,220 @@
+---
+title: "Outlier and Venn Diagram Results from Pinus contorta at different cutoffs for TASSEL"
+author: "Katie Lotterhos"
+date: "May 26, 2015"
+output: html_document
+---
+Data used here is stored on hulk at /data/seqcap/pine/bwa_pseudo/round2_bams/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window_RESULTS.  It was transferred to my laptop to make the markdown files
+
+```{r, echo=FALSE, eval=FALSE}
+rmarkdown::render("driverProcessBayenvResults4VennResultsv3_TASSEL_PCA.Rmd")
+```
+
+In this analysis, we ran TASSEL on over 1,000,000 SNPs from the Pine sequence capture.  We had X phenotype variables of biological interest.
+
+```{r, echo=FALSE}
+### set the wd
+setwd("/Users/katie/Desktop/current projects/1-AdaptreeData/2015_POST_FILTERING/pine_src") #on Mac Pro
+if(!("rmarkdown" %in% installed.packages())) {install.packages("rmarkdown", dependencies=TRUE)}
+if(!("limma" %in% installed.packages())) {
+  source("http://www.bioconductor.org/biocLite.R")
+  biocLite("limma")
+  }
+if(!("xtable" %in% installed.packages())) {install.packages("xtable", dependencies=TRUE)}
+library(rmarkdown)
+library(limma)
+library(xtable)
+### rmarkdown::render("driverProcessBayenvResults4VennResultsv3.Rmd")
+````
+
+### Information about this R session
+```{r session}
+sessionInfo()
+```
+
+### The SNP dataset 
+
+Here are the column names in the SNP dataset: (the ones named after the environments contain Bayes Factors.  "rho" represents Spearman's rho, which indicates the correlation between the reference SNP frequency and the environment.)
+
+```{r read in file}
+#filename <- "var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window.3xbf.log10"
+filename <- "../pine_data/var_out_GATK3_allhet_pine688_ALL.summary.ALL.annots.sorted.GOOD.window_RESULTS.log10bf"
+#filename <- "../pine_data/bayenv.lfmmbeagle.res"
+### read in file with log-BF
+  if(!("f2" %in% ls())){
+    f2 <- read.table(filename, header=TRUE, comment.char="&")
+  }
+  names(f2)
+
+
+phen_p <- c(paste('PC',1:16, "_p", sep=""))
+phen_slope <- c(paste('PC',1:16, "_snp_effect", sep=""))
+phen_names <- c(paste('PC',1:16,  sep=""))
+
+### Code for calculating the cutoffs
+#phencols <- which(names(f2) %in% phen_p)
+#allp <- unlist(f2[,phencols])
+#source("get.cutoffs.R")
+#a<- get.cutoffs.p(allp)
+#a
+#write.table(a, "../pine_data/phenotype_p.cutoffs", row.names=FALSE)
+
+```
+
+
+The total number of SNPs used for analysis:
+```{r}
+nrow(f2)
+```
+
+The p-values from all phenotypes were pooled to calculate cutoffs for the different quartiles of the p-value distribution.  Here are the p-value cutoffs for those percentiles: (NOTE THESE ARE THE SAME CUTOFFS AS USED FOR THE RAW PHENOTYPES)
+```{r BF cutoffs}
+### read in file with cutoffs
+  cos <- read.table("../pine_data/phenotype_p.cutoffs", header=TRUE)
+  cos <- rev(cos)
+  cos[1] <- 1
+  names(cos)[1] <- "All"
+  cos
+```
+
+
+#### Now loop through some these cutoffs and summarize the results for environment enrichment:
+
+```{r loop through cutoffs Venn xtables, echo=FALSE, results='asis'}
+   colBF <- c()
+    for (i in 1:length(phen_p)){
+      colBF[i] <- which(names(f2)==phen_p[i])
+      }
+  ### unit test
+  if(!identical(names(f2)[colBF],as.character(phen_p))){print("Error in matching names"); break}
+
+  which.cutoffs <- c(1, 4:8)
+  phentable <- phentable.perc <- data.frame(phen_names)
+
+### for each cutoff, 
+  f3 <- f2
+
+  for (i in which.cutoffs){
+    p.cutoff <- cos[1,i]
+    cutoff <- names(cos[i])
+  
+    
+    ### convert bF columns to T/F for outliers
+      f3[,colBF] <- f2[,colBF] < p.cutoff   # PVALUES LESS THAN CUTOFF
+      #head(f3[,colBF])
+      overall.out <- rowSums(f3[,colBF])>0  
+     cat("\n")
+
+    
+    ### number of outliers in each environment
+      numOutliers <-  as.numeric(unlist(colSums(f3[,colBF], na.rm=TRUE)))
+      perc.outliers <- numOutliers/sum(numOutliers)
+    #print(numOutliers)
+      phentable <- data.frame(phentable, numOutliers)
+      phentable.perc <- data.frame(phentable.perc, perc.outliers)
+      colnames(phentable)[ncol(phentable)] <- paste("numOutliers", cutoff, sep=".")
+      colnames(phentable.perc)[ncol(phentable)] <- paste("percOfOutliers", cutoff, sep=".")
+    
+   
+   
+    if (i >= 4){
+    cat(paste ("### Results for", cutoff, "percentile, which corresponds to a p-value of", p.cutoff, "..."))
+    cat("\n")
+      cat(paste("#### Total number of outliers (loci with p-value below threshold in any one phenotype):", sum(overall.out, na.rm=TRUE)), "\n")
+    } #end if
+  }# end loop
+
+cat("\n") 
+cat("### Number of outliers based on different cutoffs")
+      ### output number of outliers for each environment
+      cat("\n")      
+      cat(paste ("#### The number of outliers in each phenotype",  "\n"))
+      phentable[,2:ncol(phentable)] <- round(phentable[,2:ncol(phentable)],0)
+      print(xtable(phentable), type="html", digits=0)
+      #print(xtable(envitable.perc), type="html")
+```
+
+
+### Proportion of outliers based on different cutoffs
+```{r barplot phentable, fig.width=10, fig.height=5, echo=FALSE}
+      rownames(phentable.perc) <- phen_names
+      dat <- as.matrix(t(phentable.perc[2:ncol(phentable.perc)]))
+      par(mar=c(6,4,1,1))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=names(cos)[which.cutoffs], 
+                  ylim=c(0,1),
+                  xlab="", xaxt="n")
+
+      text(a[4,]+0.5, par("usr")[3]-0.03, 
+     srt = 90, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=0.8)
+```
+
+The PC axes that show enrichment are associated with growth variables.  See the phenotypeSummary.html for more info.
+
+#### Now loop through some these cutoffs and summarize the results for enrichment of different genomic categories:
+
+There are two approaches toward looking at enrichment: based on annotation category, or based on the set of non-coding SNPs used in the covariance matrix.
+
+##### Results based on annotation category
+
+Here, for each locus I used the minimum p-value observed in any one environment.  Then, I made a new annotation category that lumped together all non-synomymous SNPs. Next, I compared the proportion of SNPs in each annotation category for progressively more stringent cutoffs:
+
+
+```{r annotation enrichment}
+  levels(f2$X_annotation)
+
+### Make a new annotation category
+    new.annot <- as.character(unlist(f2$X_annotation))
+    new.annot[grep("nonsyn", f2$X_annotation)] <- "nonsyn"
+    new.annot <- as.factor(new.annot)
+    levels(new.annot)
+
+### Calculate the max(BF) for a locus across all environments
+  options(warn = -1)
+  min.p <- apply(f2[,colBF], 1, min, na.rm=TRUE)
+  min.p[is.infinite(min.p)]<-NA
+  
+### functions to get proportions
+get.prop.newannot <- function(V, ind, rowname=NULL){
+  a<- tapply(V[ind], new.annot[ind], length)
+  a2<- data.frame(t(a/sum(a, na.rm=TRUE)))
+  rownames(a2) <- rowname
+  a2
+  }
+
+### For barplot, x-axis categories are in columns and colored bars are in rows
+  enrich.new.annot <- data.frame(cutoff="All", get.prop.newannot(min.p, TRUE))
+
+  cutoff2 <- as.numeric(cos[which.cutoffs[-1]])
+  cutoff2names <- names(cos[which.cutoffs[-1]])
+  for (i in 1:length(cutoff2)){
+    n2 <- data.frame(cutoff=cutoff2names[i], get.prop.newannot(min.p, min.p<=cutoff2[i]) )
+    print(length(n2))
+    enrich.new.annot<- merge(enrich.new.annot, n2, all.x=TRUE, all.y=TRUE)
+  }
+```
+
+
+```{r barplot annotation, fig.width=10, fig.height=5, echo=FALSE}
+### For barplot, x-axis categories are in columns and colored bars are in rows
+      rownames(enrich.new.annot) <- enrich.new.annot[,1]
+      dat <- as.matrix(enrich.new.annot[,-1]) #removing the names
+      rm <- which(colnames(dat) %in% c("X3primeFLANK", "X5primeFLANK", "HAS_INDEL", "mismatch_altref", "multi.allelic", "unk_adj", "unk_flank"))
+      dat <- dat[,-rm]
+      par(mar=c(6,4,1,1))
+      a<- barplot(dat, beside=TRUE,  
+                  ylab="Proportion of total outliers",
+                  legend.text=rownames(enrich.new.annot), 
+                  ylim=c(0,0.75),# xlim=c(0,130),
+                  xlab="", xaxt="n",
+                  args.legend=list(x=20,y=0.6),
+                  main = )
+
+      text(a[4,], par("usr")[3]-0.03, 
+     srt = 60, adj= 1, xpd = TRUE,
+     labels = paste(colnames(dat)), cex=0.8)
+```
+
+The above results are SNP-based; they are probably driven by the significant outliers in the 5 growth days category.

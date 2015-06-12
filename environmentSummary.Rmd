@@ -13,7 +13,7 @@ This is a summary of the environmental data that was used for the bayenv2 and lf
 
 ```{r, echo=FALSE}
 ### set the wd
-setwd("/Users/katie/Desktop/AdaptreeData/2015_POST_FILTERING/pine_src/") 
+setwd("/Users/katie/Desktop/current projects/1-AdaptreeData/2015_POST_FILTERING/pine_src")
 if(!("rmarkdown" %in% installed.packages())) {install.packages("rmarkdown", dependencies=TRUE)}
 if(!("limma" %in% installed.packages())) {
   source("http://www.bioconductor.org/biocLite.R")
@@ -35,7 +35,7 @@ sessionInfo()
 
 We performed a hierarchical cluster analysis on the 22 environmental variables as a way to summarize the outliers and account for correlated variables.
 ```{r}
-env.clust <- read.table("/Users/katie/Desktop/AdaptreeData/2015_POST_FILTERING/pine_src/envi_clusters/sprucePineEnvi.clusters", header=TRUE)
+env.clust <- read.table("../pine_data/sprucePineEnvi.clusters", header=TRUE)
 env.clust
 ````
 
@@ -53,7 +53,7 @@ As one mechanism to measure adaptation to correlated environmental variables, ou
 As a second mechanism to measure adaptation to correlated environmental variables, we performed a principal components analysis.
 
 ```{r}
-env <- read.table("/Users/katie/Desktop/AdaptreeData/2015_POST_FILTERING/pine_data/var_out_pine_all_COMBINED.table.contig_flt10.bayenv.envi2")
+env <- read.table("../pine_data/var_out_pine_all_COMBINED.table.contig_flt10.bayenv.envi2")
 #head(env)
 
 in2 <- t (env)
@@ -107,7 +107,7 @@ Note that the y-axis in the following graphs are meaningless, environments are j
 Note that this is the distribution of populations along PC axes with respect to their *environments*, not with respect to their *genetic structure*.  Some of these populations might be considered outliers with respect to the environments they experience.
 
 ```{r, fig.height=8}
-popnames <- sub("Pi_", "", as.character(unlist(read.table("/Users/katie/Desktop/AdaptreeData/2015_POST_FILTERING/pine_data/var_out_pine_all_COMBINED.table.contig_flt10.bayenv.envi.finalpops2"))))
+popnames <- sub("Pi_", "", as.character(unlist(read.table("../pine_data/var_out_pine_all_COMBINED.table.contig_flt10.bayenv.envi.finalpops2"))))
 par(mfcol=c(2,1), mar=c(4,4,0,1))
 plot(scores[1,], scores[2,], xlab="PC 1", ylab="PC 2", col=0,  bty="l", xlim=c(-6,13))
   text(scores[1,], scores[2,], popnames, cex=0.7)
@@ -118,7 +118,6 @@ plot(scores[1,], scores[3,], xlab="PC 1", ylab="PC 3", col=0,  bty="l", xlim=c(-
 ### Histograms of the standardized environmental variables used in this study
 Environments were scaled to have a mean of 0 and a standard deviation of 1 for Bayenv analysis
 ```{r, fig.height=3}
-env <- read.table("/Users/katie/Desktop/AdaptreeData/2015_POST_FILTERING/pine_data/var_out_pine_all_COMBINED.table.contig_flt10.bayenv.envi2")
 #head(env)
 env2<-matrix(unlist(env), ncol=ncol(env))
 par(mfrow=c(1,1), mar=c(6,4,2,1))
